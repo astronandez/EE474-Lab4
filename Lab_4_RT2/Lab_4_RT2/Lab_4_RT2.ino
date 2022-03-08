@@ -1,8 +1,9 @@
 #include <Arduino_FreeRTOS.h>
 // Defines for Task RT2
 #define CLOCK_RATE  16000000
-#define NOTE_PERIOD 100
+#define NOTE_PERIOD 150
 #define SPKR_OFF    1500
+#define OC4A_PIN    DDH3
 
 
 
@@ -21,6 +22,8 @@ void setup() {
   TCCR4B |= 1 << WGM42;
   TCCR4B |= 1 << CS40; //16MHz clock
   OCR4A = 0; // Initially 0 
+
+  DDRH |= 1 << OC4A_PIN;
  
   xTaskCreate(
     TaskRT2
@@ -38,7 +41,7 @@ void loop() {
 
 void TaskRT2(void *p){
   static int melodyIndex = 0;
-  for(;;){
+  for(int j = 0; j < 3; j ++){
     while(melodyIndex < sizeof(melody) / sizeof(int)){
       OCR4A = freqConv(melody[melodyIndex]);
       melodyIndex++;
@@ -48,6 +51,7 @@ void TaskRT2(void *p){
     OCR4A = 0;
     vTaskDelay(1500 / portTICK_PERIOD_MS);
   }
+  vTaskDelete(NULL);
 }
 
 
