@@ -1,3 +1,4 @@
+#include <arduinoFFT.h>
 #include <Arduino_FreeRTOS.h>
 
 // Defines for Task RT1
