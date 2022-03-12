@@ -8,7 +8,7 @@
 #define IN3_PIN       24
 #define IN4_PIN       25
 
-#define STEPS         32
+#define STEPS         30
 #define STEPSPERREV   2048
 
 
@@ -78,8 +78,8 @@ void readAnalog(){
   for(;;){
     destination_pos = analogRead(A0) - 496;
     // Serial.print("Dest: ");
-    // Serial.println(destination_pos);
-    vTaskDelay(50/portTICK_PERIOD_MS);
+    Serial.println(destination_pos);
+    vTaskDelay(20/portTICK_PERIOD_MS);
   }
 }
 
@@ -91,7 +91,7 @@ void TaskSTP1(){
   if(destination_pos - curr_pos >= 0) {dir =  1;}
   if(destination_pos - curr_pos < 0) {dir = -1;}
 
-  while (stepsLeft > 0){
+  while (stepsLeft > 5){
     if(dir == 1){
       stepNumber ++;
       curr_pos ++;
@@ -122,6 +122,8 @@ void TaskSTP1(){
     }
     // Serial.print("Curr: ");
     // Serial.println(curr_pos);
-    vTaskDelay(100*step_delay / portTICK_PERIOD_MS);//Delay until next 
+    vTaskDelay(step_delay / portTICK_PERIOD_MS);//Delay until next 
   }
+  stepsLeft = 0;
+  // vTaskDelay(10/portTICK_PERIOD_MS);
 }
