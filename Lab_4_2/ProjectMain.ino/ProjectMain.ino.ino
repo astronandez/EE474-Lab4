@@ -8,14 +8,15 @@
 #define IN3_PIN       24
 #define IN4_PIN       25
 
-#define STEPS         30
+#define STEPS         32
 #define STEPSPERREV   2048
 
 
-void TaskSTP1();
-void readAnalog();
-// void TaskManager();
-// Stepper motor (STEPS, IN1_PIN, IN2_PIN, IN3_PIN, IN4_PIN);
+// void TaskSTP1();
+// void readAnalog();
+void TaskFollowX();
+void TaskServoY();
+Stepper motor (STEPS, IN1_PIN, IN2_PIN, IN3_PIN, IN4_PIN);
 long step_delay;
 long last_step_time;
 int xAnalog;
@@ -24,106 +25,79 @@ int stepsToTake;
 int destination_pos;
 int curr_pos = 0;
 int thisStep;
+int previous = 0;
 
 void setup() {
   DDRA |= 0x0F;//Enables write for all stepper pins
+
+  //Servo Set up for PWM
+  TCCR1A |= 0b01010010;
+  TCCR1B |= 0b00011011;
+
+  ICR1 = 4999;//Gives 50Hz PWM
+
+  DDRB |= 1<<DDB5;//Output pin is 11 on the arduino
+
+
 
   long step_delay = 60L * 1000L * 1000L / STEPS / 200;
 
   Serial.begin(9600);
 
-  // motor.setSpeed(200);
-  //Start basic step tasks task with RTOS
+  motor.setSpeed(1000);
+
+  xTaskCreate(
+    TaskFollowX,
+    "Follow X Axis",
+    128,
+    NULL,
+    2,
+    NULL
+  );
+
   // xTaskCreate(
-  //   TaskManager,
-  //   "Basic Manager",
+  //   TaskServoY,
+  //   "Follow Y Axis",
   //   128,
   //   NULL,
   //   2,
   //   NULL
   // );
 
-  xTaskCreate(
-    readAnalog,
-    "ReadAnalogs",
-    128,
-    NULL,
-    2,
-    NULL
-  );
-  
-  xTaskCreate(
-    TaskSTP1
-    ,   "FewSteps"
-    ,   128
-    ,   NULL
-    ,   2
-    ,   NULL );
-
   vTaskStartScheduler();
 
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  // if(millis() < 5) {
-  //   motor.step(2048);
-  //   // delay(10);
-  //   // x++;
-  // }
   delay(1);
 }
-
-void readAnalog(){
+void TaskFollowX(){
   for(;;){
-    destination_pos = analogRead(A0) - 496;
-    // Serial.print("Dest: ");
-    Serial.println(destination_pos);
-    vTaskDelay(20/portTICK_PERIOD_MS);
+    int val = analogRead(A0);
+    if(val > 2*496){
+      val = 2*496;
+    } else if(val < 10){
+      val = 0;
+    }
+    val = val - 496;
+
+  if(val - previous > 8 || val - previous < -8){
+    motor.step(val - previous);
+    previous = val;
+  }
+    
+
+    // previous = val;
+    vTaskDelay(step_delay/ portTICK_PERIOD_MS);//Delay until next
   }
 }
 
-void TaskSTP1(){
-  static int stepNumber = 0;
-  int stepsLeft = abs(destination_pos) - abs(curr_pos);
+// void TaskServoY(){
+//   for(;;){
+//     int destVal = analogRead(A1) / 2 + 94;
 
-  int dir;
-  if(destination_pos - curr_pos >= 0) {dir =  1;}
-  if(destination_pos - curr_pos < 0) {dir = -1;}
+//     OCR1A = destVal;
 
-  while (stepsLeft > 5){
-    if(dir == 1){
-      stepNumber ++;
-      curr_pos ++;
-      if(stepNumber == 4){
-        stepNumber = 0;//Only between 0 and 3 for step number
-      }
-    } else {
-      if(stepNumber == 0){
-        stepNumber = 4;
-      }
-      curr_pos --;
-      stepNumber --;
-    }
-    stepsLeft --;
-    switch (stepNumber) {
-      case 0:  // 1010
-          PORTA = 0b00000101;      
-      break;
-      case 1:  // 0110
-        PORTA = 0b00000110;
-      break;
-      case 2:  //0101
-          PORTA = 0b00001010;
-      break;
-      case 3:  //1001
-        PORTA = 0b00001001;
-      break;
-    }
-    // Serial.print("Curr: ");
-    // Serial.println(curr_pos);
-    vTaskDelay(step_delay / portTICK_PERIOD_MS);//Delay until next 
-  }
-  stepsLeft = 0;
-  // vTaskDelay(10/portTICK_PERIOD_MS);
-}
+//     vTaskDelay(10/portTICK_PERIOD_MS);
+//   }
+// }
