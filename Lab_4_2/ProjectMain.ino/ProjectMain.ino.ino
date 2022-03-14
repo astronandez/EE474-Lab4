@@ -1,5 +1,7 @@
 #include <Stepper.h>
 #include <Arduino_FreeRTOS.h>
+// #include <FreeRTOS.h>
+// #include "atomic.h"
 #include <stdlib.h>
 
 
@@ -16,11 +18,14 @@
 // void readAnalog();
 void TaskFollowX();
 void TaskServoY();
+void TaskReadJoystick();
 Stepper motor (STEPS, IN1_PIN, IN2_PIN, IN3_PIN, IN4_PIN);
 long step_delay;
 long last_step_time;
-int xAnalog;
-int yAnalog;
+int xVal;
+int yVal;
+int xPrev;
+int yPrev;
 int stepsToTake;
 int destination_pos;
 int curr_pos = 0;
@@ -46,24 +51,37 @@ void setup() {
 
   motor.setSpeed(1000);
 
+  int xVal = 496;
+  int yVal = 496;
+
+  xTaskCreate(
+    TaskReadJoystick,
+    "Read Joystick",
+    128,
+    NULL,
+    0,
+    NULL
+  );
+
   xTaskCreate(
     TaskFollowX,
     "Follow X Axis",
     128,
     NULL,
-    2,
+    0,
     NULL
   );
 
-  // xTaskCreate(
-  //   TaskServoY,
-  //   "Follow Y Axis",
-  //   128,
-  //   NULL,
-  //   2,
-  //   NULL
-  // );
+  xTaskCreate(
+    TaskServoY,
+    "Follow Y Axis",
+    128,
+    NULL,
+    0,
+    NULL
+  );
 
+  Serial.println("Start of Scheduler");
   vTaskStartScheduler();
 
 }
@@ -71,33 +89,40 @@ void setup() {
 void loop() {
   delay(1);
 }
-void TaskFollowX(){
+
+void TaskReadJoystick(){
   for(;;){
-    int val = analogRead(A0);
-    if(val > 2*496){
-      val = 2*496;
-    } else if(val < 10){
-      val = 0;
+    xVal = analogRead(A0);
+    if(xVal > 2*496){
+      xVal = 2*496;
+    } else if(xVal < 10){
+      xVal = 0;
     }
-    val = val - 496;
-
-  if(val - previous > 8 || val - previous < -8){
-    motor.step(val - previous);
-    previous = val;
-  }
-    
-
-    // previous = val;
-    vTaskDelay(step_delay/ portTICK_PERIOD_MS);//Delay until next
+    xVal = xVal - 496;
+    yVal = analogRead(A1) / 2 + 94;
+    vTaskDelay(15/portTICK_PERIOD_MS);
+    // Serial.println("Read Joy Stick");
   }
 }
 
-// void TaskServoY(){
-//   for(;;){
-//     int destVal = analogRead(A1) / 2 + 94;
 
-//     OCR1A = destVal;
+void TaskFollowX(){
+  for(;;){
+    if(xVal - previous > 8 || xVal - previous < -8){
+      // taskENTER_CRITICAL();
+      // Serial.println("Stepper go burrrrrrrrrrrrrrrrrrrrr");
+      motor.step(xVal - previous);
+      previous = xVal;
+      // taskEXIT_CRITICAL();
+    }
+    vTaskDelay(250 / portTICK_PERIOD_MS);//Delay until next
+  }
+}
 
-//     vTaskDelay(10/portTICK_PERIOD_MS);
-//   }
-// }
+void TaskServoY(){
+  for(;;){
+    // Serial.println("Moving Servo");
+    OCR1A = yVal;
+    vTaskDelay(5/portTICK_PERIOD_MS);
+  }
+}
