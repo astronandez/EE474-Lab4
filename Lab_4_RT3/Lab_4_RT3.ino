@@ -6,7 +6,7 @@
 #define LOOP_COUNT    5
 arduinoFFT FFT = arduinoFFT();
 
-const uint16_t samples = 64;
+const uint16_t samples = 128;
 const double signalFreq = 1000;
 const double samplingFreq = 5000;
 const uint8_t amp = 100;
@@ -41,24 +41,14 @@ void setup() {
     ,   &xRT3p0Handle );
 
   xTaskCreate(
-    TaskRT3p1
-    ,   "RT3p1"
-    ,   450
-    ,   NULL
-    ,   2
-    ,   &xRT3p1Handle );
-
-  xTaskCreate(
     TaskRT4
     ,   "RT4"
-    ,   500
+    ,   200
     ,   NULL
-    ,   2
+    ,   3
     ,   &xRT4Handle );
 
-  vTaskSuspend(xRT3p1Handle);
   vTaskSuspend(xRT4Handle);
-  
   vTaskStartScheduler();
 }
 
@@ -71,37 +61,51 @@ void TaskRT3p0(void *p){
     real[i] = random(samples * 5);
     imag[i] = 0;
   }
-  fft_queue = xQueueCreate(samples, sizeof(double));
-  xQueueSend(fft_queue, (void *)&real, (TickType_t) 10);
-  vTaskResume(xRT3p1Handle);
+  
+  fft_queue = xQueueCreate(2, sizeof(double));
+  
+  xTaskCreate(
+    TaskRT3p1
+    ,   "RT3p1"
+    ,   450
+    ,   NULL
+    ,   2
+    ,   &xRT3p1Handle );
+
   vTaskResume(xRT4Handle);
   vTaskSuspend(xRT3p0Handle);
 }
 
 void TaskRT3p1(void *p){
   static int i = 0;
-  timer_queue = xQueueCreate(LOOP_COUNT, sizeof(unsigned long));
-  
-  while(i < 5){
-    uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
-    xQueueSendToBack(fft_queue, (void *)&real, (TickType_t) 10);
-    unsigned long *elapsedTime;
-    while(xQueueReceive(timer_queue, &(elapsedTime), (TickType_t) 10 != pdPASS));
-    i++;
-    //Serial.print(*elapsedTime);
-    Serial.println(uxHighWaterMark);
+  unsigned long elapsedTime;
+  timer_queue = xQueueCreate(2, sizeof(unsigned long));
+
+  for(;;){
+    for(int i = 0; i < 5; i++){
+      xQueueSendToBack(fft_queue, (void *)real, 100);
+      xQueueReceive(timer_queue, &(elapsedTime), 100);
+    }
   }
 }
 
 void TaskRT4(void *p){
-  unsigned long startTime = xTaskGetTickCount();
-  xQueueReceive(fft_queue, &(copyData), (TickType_t) 10);
-
-  FFT.Windowing(copyData, samples, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
-  FFT.Compute(copyData, imag, samples, FFT_FORWARD);
-  FFT.ComplexToMagnitude(copyData, imag, samples);
-  double x = FFT.MajorPeak(copyData, samples, samplingFreq);
+  for(;;){
+    xQueueReceive(fft_queue, (void *)real, 100);
+    for (uint16_t i = 0; i < samples; i++)
+    {
+      real[i] = int8_t((amp * (sin((i * (twoPi * cycles)) / samples))) / 2.0);/* Build data with positive and negative values*/
+      imag[i] = 0.0; //Imaginary part must be zeroed in case of looping to avoid wrong calculations and overflows
+    }
+    
+    int start = millis();
+    for(int i = 0; i < 5; i++){
+      FFT.Compute(real, imag, samples, FFT_FORWARD);
+    }
+    int finished = millis() - start;
+    Serial.println(finished);
+    xQueueSendToBack(timer_queue, (void *) &finished, 100);
+  }
   
-  unsigned long stopTime = xTaskGetTickCount() - startTime;
-  xQueueSend(timer_queue, (void *) &stopTime, (TickType_t) 10);
+
 }
