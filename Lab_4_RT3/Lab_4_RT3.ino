@@ -22,6 +22,7 @@ double copyData[samples];
 
 static QueueHandle_t fft_queue;
 static QueueHandle_t timer_queue;
+UBaseType_t uxHighWaterMark;
 
 TaskHandle_t xRT3p0Handle;
 TaskHandle_t xRT3p1Handle;
@@ -42,18 +43,22 @@ void setup() {
   xTaskCreate(
     TaskRT3p1
     ,   "RT3p1"
-    ,   200
+    ,   450
     ,   NULL
-    ,   3
+    ,   2
     ,   &xRT3p1Handle );
 
   xTaskCreate(
     TaskRT4
     ,   "RT4"
-    ,   1000
+    ,   500
     ,   NULL
     ,   2
     ,   &xRT4Handle );
+
+  vTaskSuspend(xRT3p1Handle);
+  vTaskSuspend(xRT4Handle);
+  
   vTaskStartScheduler();
 }
 
@@ -68,18 +73,23 @@ void TaskRT3p0(void *p){
   }
   fft_queue = xQueueCreate(samples, sizeof(double));
   xQueueSend(fft_queue, (void *)&real, (TickType_t) 10);
-  vTaskDelete(xRT3p0Handle);
+  vTaskResume(xRT3p1Handle);
+  vTaskResume(xRT4Handle);
+  vTaskSuspend(xRT3p0Handle);
 }
 
 void TaskRT3p1(void *p){
   static int i = 0;
   timer_queue = xQueueCreate(LOOP_COUNT, sizeof(unsigned long));
+  
   while(i < 5){
+    uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);
     xQueueSendToBack(fft_queue, (void *)&real, (TickType_t) 10);
     unsigned long *elapsedTime;
     while(xQueueReceive(timer_queue, &(elapsedTime), (TickType_t) 10 != pdPASS));
     i++;
-    Serial.println(*elapsedTime); 
+    //Serial.print(*elapsedTime);
+    Serial.println(uxHighWaterMark);
   }
 }
 
@@ -87,10 +97,10 @@ void TaskRT4(void *p){
   unsigned long startTime = xTaskGetTickCount();
   xQueueReceive(fft_queue, &(copyData), (TickType_t) 10);
 
-//  FFT.Windowing(copyData, samples, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
-//  FFT.Compute(copyData, imag, samples, FFT_FORWARD);
-//  FFT.ComplexToMagnitude(copyData, imag, samples);
-//  double x = FFT.MajorPeak(copyData, samples, samplingFreq);
+  FFT.Windowing(copyData, samples, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+  FFT.Compute(copyData, imag, samples, FFT_FORWARD);
+  FFT.ComplexToMagnitude(copyData, imag, samples);
+  double x = FFT.MajorPeak(copyData, samples, samplingFreq);
   
   unsigned long stopTime = xTaskGetTickCount() - startTime;
   xQueueSend(timer_queue, (void *) &stopTime, (TickType_t) 10);
