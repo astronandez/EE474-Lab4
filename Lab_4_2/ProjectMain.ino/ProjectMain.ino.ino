@@ -3,6 +3,7 @@
 // #include <FreeRTOS.h>
 // #include "atomic.h"
 #include <stdlib.h>
+#include "IRremote.h"
 
 
 #define IN1_PIN       22
@@ -19,6 +20,7 @@
 void TaskFollowX();
 void TaskServoY();
 void TaskReadJoystick();
+void DecodeIRSig();
 Stepper motor (STEPS, IN1_PIN, IN2_PIN, IN3_PIN, IN4_PIN);
 long step_delay;
 long last_step_time;
@@ -31,6 +33,18 @@ int destination_pos;
 int curr_pos = 0;
 int thisStep;
 int previous = 0;
+int drawMode = 0;//Set by IR remote to denote what the movement should listen too, either joystick or pre programed shapes 
+/*
+0 = joystick control
+1 = circle
+2 = square
+3 = triangle
+*/
+
+//IR Remote objects
+IRrecv irrecv(12);//On pin 12
+decode_results IRmessage;
+
 
 void setup() {
   DDRA |= 0x0F;//Enables write for all stepper pins
@@ -54,12 +68,14 @@ void setup() {
   int xVal = 496;
   int yVal = 496;
 
+  irrecv.enableIRIn();
+
   xTaskCreate(
     TaskReadJoystick,
     "Read Joystick",
     128,
     NULL,
-    0,
+    1,
     NULL
   );
 
@@ -68,7 +84,7 @@ void setup() {
     "Follow X Axis",
     128,
     NULL,
-    0,
+    1,
     NULL
   );
 
@@ -77,17 +93,28 @@ void setup() {
     "Follow Y Axis",
     128,
     NULL,
-    0,
+    1,
+    NULL
+  );
+
+  xTaskCreate(
+    DecodeIRSig,
+    "Decode IR Signal",
+    128,
+    NULL,
+    2,
     NULL
   );
 
   Serial.println("Start of Scheduler");
+  delay(500);
   vTaskStartScheduler();
 
 }
 
 void loop() {
-  delay(1);
+  Serial.println("Shits fucked if you get here");
+  delay(100);
 }
 
 void TaskReadJoystick(){
@@ -123,6 +150,32 @@ void TaskServoY(){
   for(;;){
     // Serial.println("Moving Servo");
     OCR1A = yVal;
-    vTaskDelay(5/portTICK_PERIOD_MS);
+    vTaskDelay(15/portTICK_PERIOD_MS);
   }
 }
+
+void DecodeIRSig(){
+  for(;;){
+    Serial.println("Start of Decode");
+    if (irrecv.decode(&IRmessage)) // have we received an IR signal
+    {
+      translateIR(); 
+      irrecv.resume(); // receive the next value
+    }  
+    vTaskDelay(100/portTICK_PERIOD_MS);
+  }
+}
+
+
+void translateIR() {
+  // Serial.println("Start of translate");
+  switch(IRmessage.value)
+  {
+  case 0xFF6897: Serial.println("0");    break;
+  case 0xFF30CF: Serial.println("1");    break;
+  case 0xFF18E7: Serial.println("2");    break;
+  case 0xFF7A85: Serial.println("3");    break;
+  default: 
+    Serial.println("Invalid code"); break;
+  }// End Case
+} 
