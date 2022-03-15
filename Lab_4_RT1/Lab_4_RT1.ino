@@ -1,4 +1,3 @@
-#include <arduinoFFT.h>
 #include <Arduino_FreeRTOS.h>
 
 // Defines for Task RT1
@@ -9,6 +8,13 @@
 
 void TaskRT1(void *p);
 
+/**
+ * @brief Initial code run before beginning the scheduler
+ * 
+ * Sets up internal Registers to have expected behavior and initializes some global values used by the system.
+ * Additionally, we create our the tasks for our scheduler through this function.
+ * 
+ */
 void setup() {
   DDRL |= LED_REG_BIT;
   
@@ -19,7 +25,7 @@ void setup() {
     ,   NULL
     ,   2
     ,   NULL );
-
+  
   vTaskStartScheduler();
 }
 
@@ -27,11 +33,19 @@ void loop() {
 
 }
 
+/**
+ * @brief Executes Task RT1, LED on for 100 ms and off for 200 ms
+ * 
+ * This function utilizes void *p to be called when state of the task is
+ * ready and there are no tasks of a higher priority in the ready state
+ * 
+ * @param void *p is a pointer needed by FreeRTOS to call the function
+ */
 void TaskRT1(void *p){
   for(;;){
-    PORTL |= 1 << PORTL2;
+    digitalWrite(LED_EXTERN_PIN, HIGH);
     vTaskDelay(LED_ON_TIME / portTICK_PERIOD_MS);
-    PORTL &= ~(1 << PORTL2);
+    digitalWrite(LED_EXTERN_PIN, LOW);
     vTaskDelay(LED_OFF_TIME / portTICK_PERIOD_MS);
   }
 }
