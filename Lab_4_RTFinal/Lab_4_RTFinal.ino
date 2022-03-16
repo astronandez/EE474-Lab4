@@ -1,3 +1,12 @@
+/*Lab_4_Final.cpp
+ * @file   Lab_4_Final.cpp
+ *   @author    Christian Gordon, Marc Hernandez
+ *   @date      15-Mar-2022
+ *   @brief     Lab 4 FreeRTOS and Arduino
+ *   
+ *  This code contains the methods and functions needed for Lab 4
+ *  during Winter 2022 EE 474
+ */
 #include <arduinoFFT.h>
 #include <Arduino_FreeRTOS.h>
 #include <queue.h>
@@ -39,7 +48,13 @@ TaskHandle_t xRT3p0Handle;
 TaskHandle_t xRT3p1Handle;
 TaskHandle_t xRT4Handle;
 
-
+/**
+ * @brief Initial code run before beginning the scheduler
+ * 
+ * Sets up internal Registers to have expected behavior and creates the tasks needed for RT1-4,
+ * and initializes the clock.
+ * 
+ */
 void setup() {
   Serial.begin(19200);
   while(!Serial);
@@ -52,16 +67,17 @@ void setup() {
   TCCR4B |= 1 << WGM42;
   TCCR4B |= 1 << CS40; //16MHz clock
   OCR4A = 0; // Initially 0 
-  
+
+  // Setting pin mode to output
   DDRL |= LED_REG_BIT;
   DDRH |= 1 << OC4A_PIN;
-  
+
   xTaskCreate(
   TaskRT1
   ,   "Blink"
   ,   128
   ,   NULL
-  ,   2
+  ,   3
   ,   NULL );
 
   xTaskCreate(
@@ -89,6 +105,8 @@ void setup() {
   ,   &xRT4Handle );
 
   vTaskSuspend(xRT4Handle);
+
+  /// Function required by FreeRTOS to begin scheduler
   vTaskStartScheduler();
 }
 
@@ -97,7 +115,7 @@ void loop() {
 }
 
 /**
- * @brief Executes Task RT1, LED on for 100 ms and off for 200 ms
+ * @brief Executes Task RT1, LED on for LED_ON_TIME ms and off for LED_OFF_TIME ms
  * 
  * This function utilizes void *p to be called when state of the task is
  * ready and there are no tasks of a higher priority in the ready state
@@ -113,6 +131,14 @@ void TaskRT1(void *p){
   }
 }
 
+/**
+ * @brief Executes Task RT2, play melody array, then stop noise after 3 full cycles
+ * 
+ * This function utilizes void *p to be called when state of the task is
+ * ready and there are no tasks of a higher priority in the ready state.
+ * 
+ * @param void *p is a pointer needed by FreeRTOS to call the function 
+ */
 void TaskRT2(void *p){
   static int melodyIndex = 0;
   for(int j = 0; j < 3; j ++){
@@ -128,6 +154,14 @@ void TaskRT2(void *p){
   vTaskDelete(NULL);
 }
 
+/**
+ * @brief Executes Task RT3p0, filling an array and initializing the first queue, create new task and halt
+ * 
+ * This function utilizes void *p to be called when state of the task is
+ * ready and there are no tasks of a higher priority in the ready state.
+ * 
+ * @param void *p is a pointer needed by FreeRTOS to call the function
+ */
 void TaskRT3p0(void *p){
   for(uint16_t i = 0; i < SAMPLES; i++){
     real[i] = random(SAMPLES * 5);
@@ -148,6 +182,14 @@ void TaskRT3p0(void *p){
   vTaskSuspend(xRT3p0Handle);
 }
 
+/**
+ * @brief Executes Task RT3p1, creates a new array and loops indefinatly checking for the completion of 5 FFTs
+ * 
+ * This function utilizes void *p to be called when state of the task is
+ * ready and there are no tasks of a higher priority in the ready state.
+ * 
+ * @param void *p is a pointer needed by FreeRTOS to call the function
+ */
 void TaskRT3p1(void *p){
   static int i = 0;
   unsigned long elapsedTime;
@@ -161,6 +203,14 @@ void TaskRT3p1(void *p){
   }
 }
 
+/**
+ * @brief Executes Task RT4, computes the FFT five times, then prints the time for computation on serial monitor
+ * 
+ * This function utilizes void *p to be called when state of the task is
+ * ready and there are no tasks of a higher priority in the ready state. 
+ * 
+ * @param void *p is a pointer needed by FreeRTOS to call the function
+ */
 void TaskRT4(void *p){
   for(;;){
     xQueueReceive(fft_queue, (void *)real, 100);
