@@ -1,62 +1,62 @@
+/*ProjectMain.cpp
+ * @file   Lab_4_Final.cpp
+ *   @author    Christian Gordon, Marc Hernandez
+ *   @date      15-Mar-2022
+ *   @brief     Lab 4 RTOS Project
+ *   
+ *  This code contains the methods and functions needed for Lab 4
+ *  during Winter 2022 EE 474
+ */
 #include <Stepper.h>
 #include <Arduino_FreeRTOS.h>
-// #include <FreeRTOS.h>
-// #include "atomic.h"
 #include <stdlib.h>
 #include "IRremote.h"
 
-
+//Defines for stepper motor pins
 #define IN1_PIN       22
 #define IN2_PIN       23
 #define IN3_PIN       24
 #define IN4_PIN       25
-
+//Stepper motor constants
 #define STEPS         32
 #define STEPSPERREV   2048
 
 
-// void TaskSTP1();
-// void readAnalog();
+//Task ProtoTypes
 void TaskFollowX();
 void TaskServoY();
 void TaskReadJoystick();
 void DecodeIRSig();
+//Creates stepper motor instance using the pins for our system
 Stepper motor (STEPS, IN1_PIN, IN2_PIN, IN3_PIN, IN4_PIN);
-long step_delay;
-long last_step_time;
-int xVal;
-int yVal;
-int xPrev;
-int yPrev;
-int stepsToTake;
-int destination_pos;
-int curr_pos = 0;
-int thisStep;
-int previous = 0;
-int drawMode = 0;//Set by IR remote to denote what the movement should listen too, either joystick or pre programed shapes 
-/*
-0 = joystick control
-1 = circle
-2 = square
-3 = triangle
-*/
+long step_delay;//How long each step takes
+int xVal;//Destination x value
+int yVal;//Destination y value
+int brightness = 1;//Initial brightness
+int previous = 0;//Previous location of the stepper motor
 
 //IR Remote objects
-IRrecv irrecv(12);//On pin 12
+IRrecv irrecv(8);//On pin 8
 decode_results IRmessage;
 
-
+/**
+ * @brief Initial code run before beginning the scheduler
+ * 
+ * Sets up internal Registers to have expected behavior and creates the tasks needed for RT1-4,
+ * and initializes the clock.
+ * 
+ */
 void setup() {
   DDRA |= 0x0F;//Enables write for all stepper pins
 
-  //Servo Set up for PWM
-  TCCR1A |= 0b01010010;
+  //Set up Timer 1 for PWM signals for both The Servo and the Laser brightness
+  TCCR1A |= 0b01110010;
   TCCR1B |= 0b00011011;
 
   ICR1 = 4999;//Gives 50Hz PWM
 
-  DDRB |= 1<<DDB5;//Output pin is 11 on the arduino
-
+  DDRB |= 1<<DDB5;//Output pin is 11 on the arduino servo
+  DDRB |= 1<<DDB6;//Output on pin 12 on the arduino laser
 
 
   long step_delay = 60L * 1000L * 1000L / STEPS / 200;
@@ -84,7 +84,7 @@ void setup() {
     "Follow X Axis",
     128,
     NULL,
-    1,
+    2,
     NULL
   );
 
@@ -107,16 +107,22 @@ void setup() {
   );
 
   Serial.println("Start of Scheduler");
-  delay(500);
+//  delay(500);
   vTaskStartScheduler();
 
 }
 
 void loop() {
-  Serial.println("Shits fucked if you get here");
+  Serial.println("Ooops something is wrong, you shouldn't be here");
   delay(100);
 }
 
+/**
+ * @brief Reads Position of Joystick
+ * 
+ * Reads the position of the Joystick and converts the x value into a value between 0 and 992 for the stepper motor to go to
+ * Also updates the y value to the respective servo position from 0 to 180 degrees
+ */
 void TaskReadJoystick(){
   for(;;){
     xVal = analogRead(A0);
@@ -132,20 +138,28 @@ void TaskReadJoystick(){
   }
 }
 
-
+/**
+ * @brief Moves the Stepper motor to the desired position
+ * 
+ * Keeps track of the current location of the stepper motor and moves it towards the destination set by the joystick
+ * 
+ */
 void TaskFollowX(){
   for(;;){
     if(xVal - previous > 8 || xVal - previous < -8){
-      // taskENTER_CRITICAL();
-      // Serial.println("Stepper go burrrrrrrrrrrrrrrrrrrrr");
       motor.step(xVal - previous);
       previous = xVal;
-      // taskEXIT_CRITICAL();
     }
-    vTaskDelay(250 / portTICK_PERIOD_MS);//Delay until next
+    vTaskDelay(300 / portTICK_PERIOD_MS);//Delay until next
   }
 }
 
+/**
+ * @brief Sets the position of the servo
+ * 
+ * Generates the correct output compare value that will generate the correct PWM signal for the servo to 
+ * reach the desired location.
+ */
 void TaskServoY(){
   for(;;){
     // Serial.println("Moving Servo");
@@ -154,28 +168,48 @@ void TaskServoY(){
   }
 }
 
+
+/**
+ * @brief When a correct IR signal is recieved update the brightness of the laser
+ * 
+ * When there is a message recieved, update the OCR1B register to change the brightness
+ */
 void DecodeIRSig(){
   for(;;){
-    Serial.println("Start of Decode");
+    // Serial.println("Start of Decode");
     if (irrecv.decode(&IRmessage)) // have we received an IR signal
     {
       translateIR(); 
+//      Serial.print("Updating Brightness: to ");
+      Serial.println(brightness);
+      // OCR1B = yVal;
+      OCR1B = 35*brightness;
       irrecv.resume(); // receive the next value
     }  
     vTaskDelay(100/portTICK_PERIOD_MS);
   }
 }
 
-
+/**
+ * @brief Translate IR message and change values based on it
+ * 
+ * When either up or down buttons are pressed, it will update the brightness value based on the button pressed
+ */
 void translateIR() {
   // Serial.println("Start of translate");
   switch(IRmessage.value)
   {
-  case 0xFF6897: Serial.println("0");    break;
-  case 0xFF30CF: Serial.println("1");    break;
-  case 0xFF18E7: Serial.println("2");    break;
-  case 0xFF7A85: Serial.println("3");    break;
+  case 0xFF906F:
+    if(brightness > 1){
+      brightness --;
+    }
+    break;
+  case 0xFFE01F:
+    if(brightness < 10){
+      brightness ++;
+    }
+    break;
   default: 
-    Serial.println("Invalid code"); break;
+    break;
   }// End Case
 } 
